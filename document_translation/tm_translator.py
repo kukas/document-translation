@@ -2,9 +2,13 @@ import logging
 from typing import Dict, List, Tuple
 import argparse
 
+from sentence_splitter import SentenceSplitter  # type: ignore
+
 from document_translation.markuptranslator import Translator
 
 logger = logging.getLogger(__name__)
+
+SENT_LEN_LIMIT = 500
 
 
 class TMTranslator(Translator):
@@ -16,7 +20,7 @@ class TMTranslator(Translator):
     unchanged as a fallback.
     """
 
-    def __init__(self, src_file: str, tgt_file: str) -> None:
+    def __init__(self, src_file: str, tgt_file: str, src_lang: str) -> None:
         """Load the translation memory from *src_file* and *tgt_file*.
 
         Both files must have the same number of lines; each line *i* in
@@ -25,7 +29,10 @@ class TMTranslator(Translator):
         Args:
             src_file: Path to the file containing source sentences (one per line).
             tgt_file: Path to the file containing target sentences (one per line).
+            src_lang: BCP-47 language code of the source language (used by the
+                sentence splitter, e.g. ``"de"`` or ``"uk"``).
         """
+        self.splitter = SentenceSplitter(language=src_lang)
         self.tm: Dict[str, str] = {}
         with open(src_file, encoding="utf-8") as f_src, \
              open(tgt_file, encoding="utf-8") as f_tgt:
@@ -41,11 +48,32 @@ class TMTranslator(Translator):
                     self.tm[src] = tgt
         logger.info("Loaded %d translation memory entries from %r / %r", len(self.tm), src_file, tgt_file)
 
+    def _split_to_sent_array(self, text: str) -> List[str]:
+        """Split *text* into sentences, further splitting overlong sentences."""
+        charlimit = SENT_LEN_LIMIT
+        sent_array: List[str] = []
+        for sent in self.splitter.split(text):
+            while len(sent) > charlimit:
+                try:
+                    beg = 0
+                    while sent[beg] == ' ':
+                        beg += 1
+                    last_space_idx = sent.rindex(" ", beg, charlimit)
+                    sent_array.append(sent[0:last_space_idx])
+                    sent = sent[last_space_idx:]
+                except ValueError:
+                    sent_array.append(sent[0:charlimit])
+                    sent = sent[charlimit:]
+            sent_array.append(sent)
+        return sent_array
+
     def translate(self, input_text: str) -> Tuple[List[str], List[str]]:
         """Translate *input_text* using the translation memory.
 
-        The input is split into lines.  Each line is looked up in the TM.
-        Lines that are not found are returned unchanged and a warning is logged.
+        The input is split into lines and each line is further split into
+        sentences using the sentence splitter.  Each sentence is looked up in
+        the TM.  Sentences that are not found are returned unchanged and a
+        warning is logged.
 
         Returns:
             A tuple ``(src_sentences, tgt_sentences)`` where each element is a
@@ -61,19 +89,32 @@ class TMTranslator(Translator):
         src_sentences: List[str] = []
         tgt_sentences: List[str] = []
 
-        for i, line in enumerate(lines):
-            is_last = i == len(lines) - 1
-            # Determine the suffix: newline for every line except possibly the last
-            suffix = "\n" if (not is_last or ends_with_newline) else ""
+        for line_idx, line in enumerate(lines):
+            is_last_line = line_idx == len(lines) - 1
 
-            if line in self.tm:
-                tgt = self.tm[line]
+            if line:
+                sents = self._split_to_sent_array(line)
             else:
-                logger.warning("Source string not found in translation memory: %r", line)
-                tgt = line
+                sents = [line]
 
-            src_sentences.append(line + suffix)
-            tgt_sentences.append(tgt + suffix)
+            for sent_idx, sent in enumerate(sents):
+                is_last_sent = sent_idx == len(sents) - 1
+
+                if is_last_sent and (not is_last_line or ends_with_newline):
+                    suffix = "\n"
+                elif not is_last_sent:
+                    suffix = " "
+                else:
+                    suffix = ""
+
+                if sent in self.tm:
+                    tgt = self.tm[sent]
+                else:
+                    logger.warning("Source string not found in translation memory: %r", sent)
+                    tgt = sent
+
+                src_sentences.append(sent + suffix)
+                tgt_sentences.append(tgt + suffix)
 
         return src_sentences, tgt_sentences
 
@@ -85,9 +126,10 @@ if __name__ == "__main__":
     parser.add_argument("input_file", help="Input text file")
     parser.add_argument("src_tm_file", help="Translation memory source file (one sentence per line)")
     parser.add_argument("tgt_tm_file", help="Translation memory target file (one sentence per line)")
+    parser.add_argument("src_lang", help="Source language code (e.g. 'de', 'uk')")
     args = parser.parse_args()
 
-    translator = TMTranslator(args.src_tm_file, args.tgt_tm_file)
+    translator = TMTranslator(args.src_tm_file, args.tgt_tm_file, args.src_lang)
 
     with open(args.input_file, encoding="utf-8") as f_in:
         source = f_in.read()

@@ -4,7 +4,7 @@
    <okp:options lineBreakAsCode="no" />
     <okp:options escapeNbsp="yes"/>
     <okp:options escapeQuotes="yes"/> -->
-   <its:translateRule selector="//DOC/Metadata/@Title" translate="yes"/>
+   <!-- <its:translateRule selector="//DOC/Metadata/@Title" translate="yes"/> -->
    <its:translateRule selector="//Metadata/*" translate="no"/>
    <its:translateRule selector="ExText" translate="yes"/>
    <its:translateRule selector="MainTitle" translate="yes"/>
