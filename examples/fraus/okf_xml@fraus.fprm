@@ -6,9 +6,11 @@
     <okp:options escapeQuotes="yes"/> -->
    <!-- <its:translateRule selector="//DOC/Metadata/@Title" translate="yes"/> -->
    <its:translateRule selector="//Metadata/*" translate="no"/>
-   <its:translateRule selector="ExText" translate="yes"/>
-   <its:translateRule selector="MainTitle" translate="yes"/>
-   <its:translateRule selector="TypeInOption" translate="yes"/>
-   <its:translateRule selector="Equation" translate="yes"/>
-   <its:preserveSpaceRule selector="ExText" space="preserve"/>
+   <its:withinTextRule selector="//ExText" withinText="yes"/>
+   <its:translateRule selector="//ExText" translate="yes"/>
+   <its:translateRule selector="//MainTitle" translate="yes"/>
+   <its:translateRule selector="//TypeInOption" translate="yes"/>
+   <its:withinTextRule selector="//Equation" withinText="yes"/>
+   <its:translateRule selector="//Equation" translate="no"/>
+   <its:preserveSpaceRule selector="//ExText" space="preserve"/>
 </its:rules>
