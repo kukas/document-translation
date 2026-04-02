@@ -6,7 +6,7 @@ TRGLANG    ?= de
 
 # Source XML file(s) – override on the command line, e.g.
 #   make SRCFILES="../../../redmine_data/edukate-dev/edu01884.xml"
-SRCFILES   ?= ../../../redmine_data/edukate-dev/edu01892.xml
+SRCFILES   ?= ../../../redmine_data/edukate-dev/edu0*.xml
 
 # Source TM directory (contains src/ and trg/ sub-dirs with per-page TM files)
 TM_SRC_DIR ?= ../../../redmine_data/cs-de/dev
