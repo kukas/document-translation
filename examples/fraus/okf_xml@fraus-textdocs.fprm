@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<its:rules xmlns:its="http://www.w3.org/2005/11/its" xmlns:itsx="http://www.w3.org/2008/12/its-extensions" xmlns:okp="okapi-framework:xmlfilter-options" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.0">
+    <!-- <okp:options escapeGT="yes"/>
+   <okp:options lineBreakAsCode="no" />
+    <okp:options escapeNbsp="yes"/>
+    <okp:options escapeQuotes="yes"/> -->
+   <!-- <its:translateRule selector="//DOC/Metadata/@Title" translate="yes"/> -->
+   <!-- <its:translateRule selector="//Metadata/*" translate="no"/> -->
+   <its:withinTextRule selector="/doc/tu" withinText="no"/>
+
+   <!-- Direct children of /doc/tu (ExText_N, SelectOption*_N_M, Equation_N) are
+        "nested": inline within the /doc/tu translation unit, but each one is
+        a self-contained sub-flow so they cannot be merged into one another. -->
+   <its:withinTextRule selector="/doc/tu/*" withinText="nested"/>
+   <its:translateRule selector="/doc/tu/*" translate="yes"/>
+
+   <!-- Deeper descendants are ordinary inline elements within their parent. -->
+   <its:withinTextRule selector="/doc/tu/*/*" withinText="yes"/>
+   <its:translateRule selector="/doc/tu/*/*" translate="yes"/>
+
+   <!-- <its:withinTextRule selector="//br_END" withinText="no"/> -->
+   <!-- <its:translateRule selector="//br_END" translate="yes"/> -->
+
+   <!-- <its:withinTextRule selector="//*[starts-with(name(), 'ExText')]" withinText="yes"/> -->
+   <!-- <its:translateRule selector="//*[starts-with(name(), 'ExText')]" translate="yes"/> -->
+   <!-- <its:withinTextRule selector="//*[starts-with(name(), 'Equation')]" withinText="yes"/> -->
+   <!-- <its:translateRule selector="//*[starts-with(name(), 'Equation')]" translate="no"/> -->
+
+</its:rules>

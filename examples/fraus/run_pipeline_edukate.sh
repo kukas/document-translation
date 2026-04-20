@@ -23,32 +23,43 @@ pipeline() {
         return 0
     fi
 
-    echo "Unescaping ${file}"
-    python unescape_fraus.py --skip-xml-declaration ${fullpath} ${tmpdir}/${file}
+    echo "Extracting JSON Textdocs from Fraus XML ${file}"
+    python3 edUKate/scripts/extract_textdocs.py --doc-level "/DOC/ExercisePages" < ${fullpath} > ${tmpdir}/${file}.${srclang}.textdocs.jsonl
 
-    echo "Extracting text from XML ${file}"
-    format="okf_xml@fraus.fprm"
-    $tikal -xm ${tmpdir}/${file} -fc $format -sl ${srclang} -to ${tmpdir}/${file}
+    echo "Extracting content from JSON Textdocs ${file}"
+    jq -r '.content[].text | gsub("\n"; "\\n")' ${tmpdir}/${file}.${srclang}.textdocs.jsonl > ${tmpdir}/${file}.${srclang}.textdocs.txt
 
-    echo "Unescaping HTML ${file}"
-    python escape_tool.py --unescape ${tmpdir}/${file}.${srclang} ${tmpdir}/${file}.${srclang}.html
+    echo "Wrapping Textdocs content in <doc> and <tu> tags to obtain valid simplified XML ${file}"
+    echo '<?xml version="1.0" encoding="utf-8"?>' > ${tmpdir}/${file}.${srclang}.textdocs.xml
+    echo '<doc>' >> ${tmpdir}/${file}.${srclang}.textdocs.xml
+    awk '{ print "<tu>" $0 "</tu>" }' ${tmpdir}/${file}.${srclang}.textdocs.txt >> ${tmpdir}/${file}.${srclang}.textdocs.xml
+    echo '</doc>' >> ${tmpdir}/${file}.${srclang}.textdocs.xml
 
-    awk '{ print "<p>" $0 "</p>" }' ${tmpdir}/${file}.${srclang}.html > ${tmpdir}/${file}.${srclang}.p.html
+    echo "Extracting content for translation from simplified XML ${file}"
+    format="okf_xml@fraus-textdocs.fprm"
+    $tikal -xm ${tmpdir}/${file}.${srclang}.textdocs.xml -fc $format -sl ${srclang} -to ${tmpdir}/${file}.${srclang}.textdocs.xml
 
-    echo "Extracting text from HTML ${file}"
-    format_2="okf_html@fraus.fprm"
-    $tikal -xm ${tmpdir}/${file}.${srclang}.p.html -fc $format_2 -sl ${srclang} -to ${tmpdir}/${file}.${srclang}.second_extraction
-
+    echo "Translating from ${srclang} to ${trglang} ${file}"
     basefile=${file%%.*}
-    translate_markup ${tmpdir}/${file}.${srclang}.second_extraction.${srclang} ${srclang} ${trglang} ${tmpdir}/${file}.${trglang}.second_extraction.${trglang} --tm ${tmdir}/src/${basefile}.txt ${tmdir}/trg/${basefile}.txt
-    python fix_text_outside_g.py ${tmpdir}/${file}.${trglang}.second_extraction.${trglang} ${tmpdir}/${file}.${trglang}.fixed_g.${trglang}
+    translate_markup ${tmpdir}/${file}.${srclang}.textdocs.xml.${srclang} ${srclang} ${trglang} ${tmpdir}/${file}.${trglang}.textdocs.xml.${trglang} --tm ${tmdir}/src/${basefile}.txt ${tmdir}/trg/${basefile}.txt
+    #python fix_text_outside_g.py ${tmpdir}/${file}.${trglang}.textdocs.xml.${trglang} ${tmpdir}/${file}.${trglang}.textdocs.xml.${trglang}.fixed_g
 
-    $tikal -lm ${tmpdir}/${file}.${srclang}.p.html -fc $format_2 -sl ${srclang} -tl ${trglang} -overtrg -from ${tmpdir}/${file}.${trglang}.fixed_g.${trglang} -to ${tmpdir}/${file}.${trglang}.p.html
-    sed "s/^<p>\(.*\)<\/p>$/\1/" ${tmpdir}/${file}.${trglang}.p.html > ${tmpdir}/${file}.${trglang}.html
-    $tikal -lm ${tmpdir}/${file} -fc $format -sl ${srclang} -tl ${trglang} -overtrg -from ${tmpdir}/${file}.${trglang}.html -to ${outdir}/${file}
+    echo "Reconstructing simplified XML using the translated content ${file}"
+    $tikal -lm ${tmpdir}/${file}.${srclang}.textdocs.xml -fc $format -sl ${srclang} -tl ${trglang} -overtrg -from ${tmpdir}/${file}.${trglang}.textdocs.xml.${trglang} -to ${tmpdir}/${file}.${trglang}.textdocs.xml
 
-    # python unescape_fraus.py --skip-xml-declaration ${tmpdir}/${file}.reconstructed ${tmpdir}/${file}.reconstructed.normalized
-    # tikal -lm ${tmpdir}/${file} -fc $format -sl cs -tl uk -overtrg -from ${tmpdir}/${file}.cs.unescaped.notags -to ${outdir}/${file}.uk
+    echo "Unwrapping <doc> and <tu> tags to obtain translated Textdocs content ${file}"
+    cat ${tmpdir}/${file}.${trglang}.textdocs.xml | grep '<tu>' | sed 's|<tu>||g; s|</tu>||g' > ${tmpdir}/${file}.${trglang}.textdocs.txt
+
+    echo "Fixing potential issues in the structure of the translated Textdocs content ${file}"
+    python3 fix_textdocs_structure.py ${tmpdir}/${file}.${trglang}.textdocs.txt ${tmpdir}/${file}.${trglang}.textdocs.fixed.txt
+
+    echo "Reconstructing the Textdocs JSON structure using the translated content ${file}"
+    python3 replace_textdocs_texts.py ${tmpdir}/${file}.${trglang}.textdocs.fixed.txt < ${tmpdir}/${file}.${srclang}.textdocs.jsonl > ${tmpdir}/${file}.${trglang}.textdocs.jsonl
+
+    echo "Reconstructing the original XML structure using the translated Textdocs ${file}"
+    python3 edUKate/scripts/import_textdoc_to_orig.py ${tmpdir}/${file}.${trglang}.textdocs.jsonl < ${fullpath} > ${outdir}/${file}
+    # sed "s/^<p>\(.*\)<\/p>$/\1/" ${tmpdir}/${file}.${trglang}.p.html > ${tmpdir}/${file}.${trglang}.html
+    # $tikal -lm ${tmpdir}/${file} -fc $format -sl ${srclang} -tl ${trglang} -overtrg -from ${tmpdir}/${file}.${trglang}.html -to ${outdir}/${file}
 }
 
 # Files to process: passed as extra arguments after srclang/trglang/outdir/tmpdir/tmdir, or default
@@ -58,5 +69,10 @@ if [ ${#files[@]} -eq 0 ]; then
 fi
 
 for file in "${files[@]}"; do
+    base=$(basename "$file" .xml)
+    if [[ " ${SKIP_FILES:-} " == *" ${base} "* ]]; then
+        echo "Skipping ${base} (in SKIP_FILES)"
+        continue
+    fi
     time pipeline "$file"
 done

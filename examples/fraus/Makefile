@@ -4,16 +4,23 @@ SHELL=/bin/bash
 SRCLANG    ?= cs
 TRGLANG    ?= de
 
+# Dataset split: dev or test (controls SRCFILES and TM_SRC_DIR defaults)
+SPLIT      ?= dev
+
 # Source XML file(s) – override on the command line, e.g.
 #   make SRCFILES="../../../redmine_data/edukate-dev/edu01884.xml"
-SRCFILES   ?= ../../../redmine_data/edukate-dev/edu0*.xml
+SRCFILES   ?= ../../../redmine_data/edukate-$(SPLIT)/edu*.xml
 
 # Source TM directory (contains src/ and trg/ sub-dirs with per-page TM files)
-TM_SRC_DIR ?= ../../../redmine_data/cs-de/dev
+TM_SRC_DIR ?= ../../../redmine_data/cs-de/$(SPLIT)
 
-OUT_DIR    ?= output/$(TRGLANG)
-TMP_DIR    ?= tmp/intermediate/$(TRGLANG)
-TM_DIR     ?= tmp/merged_TMs/$(TRGLANG)
+# Space-separated list of document IDs (without .xml) to skip in the pipeline
+SKIP_FILES ?= edu03248 edu30838 edu30056 edu31714 edu32072 edu33382 \
+              edu01957 edu30835 edu30837 edu33527 edu34989
+
+OUT_DIR    ?= output/$(SPLIT)/$(TRGLANG)
+TMP_DIR    ?= tmp/intermediate/$(SPLIT)/$(TRGLANG)
+TM_DIR     ?= tmp/merged_TMs/$(SPLIT)/$(TRGLANG)
 
 MERGED_TM_DIR = $(TM_DIR)
 
@@ -33,7 +40,7 @@ $(MERGED_TM_DIR)/.merged:
 
 ## Stage 2 – run the translation pipeline on the source XML files
 pipeline: merge_tms
-	bash run_pipeline_edukate.sh $(SRCLANG) $(TRGLANG) $(OUT_DIR) $(TMP_DIR) $(TM_DIR) $(SRCFILES)
+	SKIP_FILES="$(SKIP_FILES)" bash run_pipeline_edukate.sh $(SRCLANG) $(TRGLANG) $(OUT_DIR) $(TMP_DIR) $(TM_DIR) $(SRCFILES)
 
 ## Stage 3 – compare every translated output XML with its source XML
 # For each source file  path/to/foo.xml  the pipeline writes  $(OUT_DIR)/foo.xml.
