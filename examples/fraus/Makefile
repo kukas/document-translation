@@ -12,7 +12,7 @@ SPLIT      ?= dev
 SRCFILES   ?= ../../../redmine_data/edukate-$(SPLIT)/edu*.xml
 
 # Source TM directory (contains src/ and trg/ sub-dirs with per-page TM files)
-TM_SRC_DIR ?= ../../../redmine_data/cs-de/$(SPLIT)
+TM_SRC_DIR ?= ../../../redmine_data/$(SRCLANG)-$(TRGLANG)/$(SPLIT)
 
 # Space-separated list of document IDs (without .xml) to skip in the pipeline
 SKIP_FILES ?= edu03248 edu30838 edu30056 edu31714 edu32072 edu33382 \
