@@ -5,6 +5,7 @@ trglang=${2:-de}
 outdir=${3:-output/${trglang}}
 tmpdir=${4:-${outdir}/tmp}
 tmdir=${5:-${tmpdir}/00.merged_TMs}
+global_tmdir=${6:-}
 tikal=~/apps/okapi-framework/tikal.sh
 
 mkdir -p "$outdir" "$tmpdir"
@@ -24,7 +25,7 @@ pipeline() {
     fi
 
     echo "Extracting JSON Textdocs from Fraus XML ${file}"
-    python3 edUKate/scripts/extract_textdocs.py --doc-level "/DOC/ExercisePages" < ${fullpath} > ${tmpdir}/${file}.${srclang}.textdocs.jsonl
+    python3 edUKate/scripts/extract_textdocs.py --split-to-sents udpipe --doc-level "/DOC/ExercisePages" < ${fullpath} > ${tmpdir}/${file}.${srclang}.textdocs.jsonl
 
     echo "Extracting content from JSON Textdocs ${file}"
     jq -r '.content[].text | gsub("\n"; "\\n")' ${tmpdir}/${file}.${srclang}.textdocs.jsonl > ${tmpdir}/${file}.${srclang}.textdocs.txt
@@ -41,7 +42,11 @@ pipeline() {
 
     echo "Translating from ${srclang} to ${trglang} ${file}"
     basefile=${file%%.*}
-    translate_markup ${tmpdir}/${file}.${srclang}.textdocs.xml.${srclang} ${srclang} ${trglang} ${tmpdir}/${file}.${trglang}.textdocs.xml.${trglang} --tm ${tmdir}/src/${basefile}.txt ${tmdir}/trg/${basefile}.txt
+    global_tm_args=()
+    if [ -n "${global_tmdir}" ] && [ -f "${global_tmdir}/src/global.txt" ]; then
+        global_tm_args=(--global-tm "${global_tmdir}/src/global.txt" "${global_tmdir}/trg/global.txt")
+    fi
+    translate_markup ${tmpdir}/${file}.${srclang}.textdocs.xml.${srclang} ${srclang} ${trglang} ${tmpdir}/${file}.${trglang}.textdocs.xml.${trglang} --tm ${tmdir}/src/${basefile}.txt ${tmdir}/trg/${basefile}.txt "${global_tm_args[@]}"
     #python fix_text_outside_g.py ${tmpdir}/${file}.${trglang}.textdocs.xml.${trglang} ${tmpdir}/${file}.${trglang}.textdocs.xml.${trglang}.fixed_g
 
     echo "Reconstructing simplified XML using the translated content ${file}"
@@ -62,8 +67,8 @@ pipeline() {
     # $tikal -lm ${tmpdir}/${file} -fc $format -sl ${srclang} -tl ${trglang} -overtrg -from ${tmpdir}/${file}.${trglang}.html -to ${outdir}/${file}
 }
 
-# Files to process: passed as extra arguments after srclang/trglang/outdir/tmpdir/tmdir, or default
-files=("${@:6}")
+# Files to process: passed as extra arguments after srclang/trglang/outdir/tmpdir/tmdir/global_tmdir, or default
+files=("${@:7}")
 if [ ${#files[@]} -eq 0 ]; then
     files=(../../../redmine_data/edukate-dev/edu01892.xml)
 fi
