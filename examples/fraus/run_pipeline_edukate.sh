@@ -54,7 +54,7 @@ pipeline() {
     $tikal -lm ${tmpdir}/${file}.${srclang}.textdocs.xml -fc $format -sl ${srclang} -tl ${trglang} -overtrg -from ${tmpdir}/${file}.${trglang}.textdocs.xml.${trglang} -to ${tmpdir}/${file}.${trglang}.textdocs.xml
 
     echo "Unwrapping <doc> and <tu> tags to obtain translated Textdocs content ${file}"
-    cat ${tmpdir}/${file}.${trglang}.textdocs.xml | grep '<tu>' | sed 's|<tu>||g; s|</tu>||g' > ${tmpdir}/${file}.${trglang}.textdocs.txt
+    python3 unwrap_tu.py ${tmpdir}/${file}.${trglang}.textdocs.xml ${tmpdir}/${file}.${trglang}.textdocs.txt
 
     echo "Fixing potential issues in the structure of the translated Textdocs content ${file}"
     python3 fix_textdocs_structure.py ${tmpdir}/${file}.${trglang}.textdocs.txt ${tmpdir}/${file}.${trglang}.textdocs.fixed.txt
