@@ -421,7 +421,7 @@ def absorb_toplevel_text(items: list, lineno: int, logger: logging.Logger) -> tu
 
             if prev_elem_idx is not None:
                 target = new_items[prev_elem_idx]
-                logger.warning(
+                logger.debug(
                     "Line %d: top-level text %r absorbed into preceding <%s>.",
                     lineno, raw, target.tag_name,
                 )
@@ -433,7 +433,7 @@ def absorb_toplevel_text(items: list, lineno: int, logger: logging.Logger) -> tu
                 # Don't advance i – the next item is now at the same index
             elif next_elem_idx is not None:
                 target = new_items[next_elem_idx]
-                logger.warning(
+                logger.debug(
                     "Line %d: top-level text %r absorbed into following <%s>.",
                     lineno, raw, target.tag_name,
                 )
@@ -478,7 +478,7 @@ def fix_items(items: list, lineno: int, logger: logging.Logger) -> tuple:
                 idx = find_embedded_top_level(item)
                 if idx is not None:
                     inner_tag = item.children[idx][1]
-                    logger.warning(
+                    logger.debug(
                         "Line %d: <%-20s> embedded inside <%s> – extracting.",
                         lineno, inner_tag, item.tag_name,
                     )
@@ -505,7 +505,7 @@ def fix_items(items: list, lineno: int, logger: logging.Logger) -> tuple:
             if isinstance(a, Element)
         ):
             if merged != items:
-                logger.warning(
+                logger.debug(
                     "Line %d: merging adjacent same-prefix top-level elements.",
                     lineno,
                 )
@@ -534,7 +534,7 @@ def rename_to_reference(items: list, ref_items: list, lineno: int, logger: loggi
     corresponding elements in *ref_items* (matched by position).
 
     If the counts differ, as many elements as possible are renamed and a
-    warning is emitted.  Returns (new_items, was_changed).
+    debug message is emitted.  Returns (new_items, was_changed).
     """
     elems     = _top_level_elements(items)
     ref_elems = _top_level_elements(ref_items)
