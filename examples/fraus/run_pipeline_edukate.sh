@@ -57,7 +57,7 @@ pipeline() {
     grep '<tu' ${tmpdir}/${file}.${trglang}.textdocs.xml | sed 's|<tu/>||g; s|<tu>||g; s|</tu>||g' > ${tmpdir}/${file}.${trglang}.textdocs.txt
 
     echo "Fixing potential issues in the structure of the translated Textdocs content ${file}"
-    python3 fix_textdocs_structure.py ${tmpdir}/${file}.${trglang}.textdocs.txt ${tmpdir}/${file}.${trglang}.textdocs.fixed.txt
+    python3 fix_textdocs_structure.py --reference ${tmpdir}/${file}.${srclang}.textdocs.txt ${tmpdir}/${file}.${trglang}.textdocs.txt ${tmpdir}/${file}.${trglang}.textdocs.fixed.txt
 
     echo "Reconstructing the Textdocs JSON structure using the translated content ${file}"
     python3 replace_textdocs_texts.py ${tmpdir}/${file}.${trglang}.textdocs.fixed.txt < ${tmpdir}/${file}.${srclang}.textdocs.jsonl > ${tmpdir}/${file}.${trglang}.textdocs.jsonl

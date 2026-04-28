@@ -523,11 +523,64 @@ def items_to_str(items: list) -> str:
     return ''.join(item.to_str() if isinstance(item, Element) else item[2] for item in items)
 
 
+def _top_level_elements(items: list) -> list:
+    """Return only the Element objects from a parsed item list."""
+    return [it for it in items if isinstance(it, Element)]
+
+
+def rename_to_reference(items: list, ref_items: list, lineno: int, logger: logging.Logger) -> tuple:
+    """
+    Rename top-level elements in *items* so that their tag names match the
+    corresponding elements in *ref_items* (matched by position).
+
+    If the counts differ, as many elements as possible are renamed and a
+    warning is emitted.  Returns (new_items, was_changed).
+    """
+    elems     = _top_level_elements(items)
+    ref_elems = _top_level_elements(ref_items)
+
+    if not ref_elems:
+        return items, False
+
+    if len(elems) != len(ref_elems):
+        logger.warning(
+            "Line %d: element count mismatch – input has %d top-level element(s), "
+            "reference has %d; renaming up to min(%d, %d).",
+            lineno, len(elems), len(ref_elems), len(elems), len(ref_elems),
+        )
+
+    changed = False
+    for elem, ref_elem in zip(elems, ref_elems):
+        new_name = ref_elem.tag_name
+        if elem.tag_name == new_name:
+            continue
+        logger.debug(
+            "Line %d: renaming <%s> → <%s> to match reference.",
+            lineno, elem.tag_name, new_name,
+        )
+        # Patch the open token
+        old_open_raw  = elem.open_tok[2]
+        new_open_raw  = re.sub(
+            r'^<[a-zA-Z_][a-zA-Z0-9_]*', '<' + new_name, old_open_raw, count=1
+        )
+        elem.open_tok  = ('open',  new_name, new_open_raw)
+        # Patch the close token
+        elem.close_tok = ('close', new_name, f'</{new_name}>')
+        changed = True
+
+    return items, changed
+
+
 # ---------------------------------------------------------------------------
 # Main processing
 # ---------------------------------------------------------------------------
 
-def process_line(line: str, lineno: int, logger: logging.Logger) -> tuple:
+def process_line(
+    line: str,
+    lineno: int,
+    logger: logging.Logger,
+    ref_line: 'str | None' = None,
+) -> tuple:
     """
     Process one line.  Returns (output_line, was_changed).
     """
@@ -536,12 +589,26 @@ def process_line(line: str, lineno: int, logger: logging.Logger) -> tuple:
 
     violations = validate_line(items)
     if not violations:
+        # Still apply reference renaming even when structure is already valid
+        if ref_line is not None:
+            ref_tokens = tokenise(ref_line)
+            ref_items  = parse_top_level(ref_tokens)
+            items, renamed = rename_to_reference(items, ref_items, lineno, logger)
+            if renamed:
+                return items_to_str(items), True
         return line, False
 
     for v in violations:
         logger.debug("Line %d: violation detected: %s", lineno, v)
 
     fixed_items, changed = fix_items(items, lineno, logger)
+
+    # Rename to match reference structure (if provided)
+    if ref_line is not None:
+        ref_tokens = tokenise(ref_line)
+        ref_items  = parse_top_level(ref_tokens)
+        fixed_items, renamed = rename_to_reference(fixed_items, ref_items, lineno, logger)
+        changed = changed or renamed
 
     # Final validation check
     remaining = validate_line(fixed_items)
@@ -558,6 +625,7 @@ def process_file(
     input_path: str,
     output_path: str,
     logger: logging.Logger,
+    reference_path: 'str | None' = None,
 ) -> tuple:
     """
     Process the whole file.  Returns (fix_count, error_count).
@@ -573,11 +641,17 @@ def process_file(
 
     logger.addHandler(ErrorCounter())
 
+    ref_lines = None
+    if reference_path is not None:
+        with open(reference_path, 'r', encoding='utf-8') as fref:
+            ref_lines = [l.rstrip('\n') for l in fref]
+
     with open(input_path, 'r', encoding='utf-8') as fin, \
          open(output_path, 'w', encoding='utf-8') as fout:
         for lineno, raw_line in enumerate(fin, start=1):
-            line = raw_line.rstrip('\n')
-            fixed_line, changed = process_line(line, lineno, logger)
+            line    = raw_line.rstrip('\n')
+            ref_line = ref_lines[lineno - 1] if (ref_lines is not None and lineno - 1 < len(ref_lines)) else None
+            fixed_line, changed = process_line(line, lineno, logger, ref_line=ref_line)
             fout.write(fixed_line + '\n')
             if changed:
                 fix_count += 1
@@ -610,6 +684,14 @@ def main():
         help=(
             'Only report violations; do not write output_file. '
             'Exits with code 1 if any violation is found.'
+        ),
+    )
+    parser.add_argument(
+        '--reference', metavar='FILE',
+        help=(
+            'Parallel reference file (e.g. the source .textdocs.txt). '
+            'Each line\'s top-level element names are used to rename the '
+            'corresponding output line\'s top-level elements after fixing.'
         ),
     )
     parser.add_argument(
@@ -647,7 +729,7 @@ def main():
             logger.info('No violations found.')
         return
 
-    fix_count, error_count = process_file(args.input_file, args.output_file, logger)
+    fix_count, error_count = process_file(args.input_file, args.output_file, logger, reference_path=args.reference)
 
     if fix_count or error_count:
         logger.info(
