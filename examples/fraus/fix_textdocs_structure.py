@@ -35,7 +35,7 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 # Tag prefixes that define top-level elements
 # ---------------------------------------------------------------------------
-TOP_LEVEL_PREFIXES = ('ExText', 'SelectOptionCorrect', 'SelectOptionIncorrect', 'Equation')
+TOP_LEVEL_PREFIXES = ('ExText', 'SelectOptionCorrect', 'SelectOptionIncorrect', 'TypeInOption', 'Equation')
 
 # ---------------------------------------------------------------------------
 # Tokeniser
