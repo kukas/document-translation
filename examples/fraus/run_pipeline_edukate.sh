@@ -25,7 +25,7 @@ pipeline() {
     fi
 
     echo "Extracting JSON Textdocs from Fraus XML ${file}"
-    python3 edUKate/scripts/extract_textdocs.py --split-to-sents udpipe --doc-level "/DOC/ExercisePages" < ${fullpath} > ${tmpdir}/${file}.${srclang}.textdocs.jsonl
+    python3 edUKate/scripts/extract_textdocs.py --split-to-sents basic --doc-level "/DOC/ExercisePages" < ${fullpath} > ${tmpdir}/${file}.${srclang}.textdocs.jsonl
 
     echo "Extracting content from JSON Textdocs ${file}"
     jq -r '.content[].text | gsub("\n"; "\\n")' ${tmpdir}/${file}.${srclang}.textdocs.jsonl > ${tmpdir}/${file}.${srclang}.textdocs.txt
@@ -46,7 +46,8 @@ pipeline() {
     if [ -n "${global_tmdir}" ] && [ -f "${global_tmdir}/src/global.txt" ]; then
         global_tm_args=(--global-tm "${global_tmdir}/src/global.txt" "${global_tmdir}/trg/global.txt")
     fi
-    translate_markup ${tmpdir}/${file}.${srclang}.textdocs.xml.${srclang} ${srclang} ${trglang} ${tmpdir}/${file}.${trglang}.textdocs.xml.${trglang} --tm ${tmdir}/src/${basefile}.txt ${tmdir}/trg/${basefile}.txt "${global_tm_args[@]}"
+    lindat_model_name="llmtranslate-1:edukate_${srclang}${trglang}_v1"
+    translate_markup ${tmpdir}/${file}.${srclang}.textdocs.xml.${srclang} ${srclang} ${trglang} ${lindat_model_name} ${tmpdir}/${file}.${trglang}.textdocs.xml.${trglang} --tm ${tmdir}/src/${basefile}.txt ${tmdir}/trg/${basefile}.txt "${global_tm_args[@]}"
     #python fix_text_outside_g.py ${tmpdir}/${file}.${trglang}.textdocs.xml.${trglang} ${tmpdir}/${file}.${trglang}.textdocs.xml.${trglang}.fixed_g
 
     echo "Reconstructing simplified XML using the translated content ${file}"
