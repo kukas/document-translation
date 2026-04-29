@@ -377,9 +377,10 @@ def merge_adjacent_same_prefix(items: list) -> list:
 def absorb_toplevel_text(items: list, lineno: int, logger: logging.Logger) -> tuple:
     """
     Absorb bare non-whitespace text nodes at the top level into the nearest
-    adjacent top-level Element.  Prefer the immediately preceding element;
-    fall back to the immediately following one.  Pure-whitespace text tokens
-    are silently dropped.
+    adjacent top-level Element.  Among the two immediate neighbours (preceding
+    and following), prefer whichever is an ExText element; if both or neither
+    are ExText, prefer the immediately preceding element.  Pure-whitespace text
+    tokens are silently dropped.
 
     Returns (new_items, changed).
     """
@@ -419,29 +420,47 @@ def absorb_toplevel_text(items: list, lineno: int, logger: logging.Logger) -> tu
                     next_elem_idx = j
                     break
 
-            if prev_elem_idx is not None:
-                target = new_items[prev_elem_idx]
-                logger.debug(
-                    "Line %d: top-level text %r absorbed into preceding <%s>.",
-                    lineno, raw, target.tag_name,
-                )
-                # Append the text token to the end of the target's children
-                target.children.append(('text', '', raw))
+            # Choose target: prefer an ExText element over the other neighbour;
+            # if both or neither are ExText, prefer the preceding one.
+            prev_elem = new_items[prev_elem_idx] if prev_elem_idx is not None else None
+            next_elem = new_items[next_elem_idx] if next_elem_idx is not None else None
+            prev_is_extext = prev_elem is not None and prev_elem.tag_name.startswith('ExText')
+            next_is_extext = next_elem is not None and next_elem.tag_name.startswith('ExText')
+
+            if prev_is_extext and not next_is_extext:
+                target = prev_elem
+                append = True
+            elif next_is_extext and not prev_is_extext:
+                target = next_elem
+                append = False
+            elif prev_elem is not None:
+                target = prev_elem
+                append = True
+            elif next_elem is not None:
+                target = next_elem
+                append = False
+            else:
+                target = None
+                append = None
+
+            if target is not None:
+                if append:
+                    logger.debug(
+                        "Line %d: top-level text %r absorbed into preceding <%s>.",
+                        lineno, raw, target.tag_name,
+                    )
+                    target.children.append(('text', '', raw))
+                else:
+                    logger.debug(
+                        "Line %d: top-level text %r absorbed into following <%s>.",
+                        lineno, raw, target.tag_name,
+                    )
+                    target.children.insert(0, ('text', '', raw))
                 new_items.pop(i)
                 pass_changed = True
                 changed = True
-                # Don't advance i – the next item is now at the same index
-            elif next_elem_idx is not None:
-                target = new_items[next_elem_idx]
-                logger.debug(
-                    "Line %d: top-level text %r absorbed into following <%s>.",
-                    lineno, raw, target.tag_name,
-                )
-                # Prepend the text token at the start of the target's children
-                target.children.insert(0, ('text', '', raw))
-                new_items.pop(i)
-                pass_changed = True
-                changed = True
+                if append:
+                    pass  # Don't advance i – next item is now at the same index
             else:
                 logger.error(
                     "Line %d: top-level text %r has no adjacent element to "
@@ -528,47 +547,105 @@ def _top_level_elements(items: list) -> list:
     return [it for it in items if isinstance(it, Element)]
 
 
+def _make_empty_element(tag_name: str) -> Element:
+    """Return an empty Element with the given tag name."""
+    open_tok  = ('open',  tag_name, f'<{tag_name}>')
+    close_tok = ('close', tag_name, f'</{tag_name}>')
+    return Element(open_tok, [], close_tok)
+
+
+def _rename_element(elem: Element, new_name: str, lineno: int, logger: logging.Logger) -> None:
+    """Rename *elem* in-place to *new_name* (within same prefix group)."""
+    old_name     = elem.tag_name
+    old_open_raw = elem.open_tok[2]
+    new_open_raw = re.sub(
+        r'^<[a-zA-Z_][a-zA-Z0-9_]*', '<' + new_name, old_open_raw, count=1
+    )
+    elem.open_tok  = ('open',  new_name, new_open_raw)
+    elem.close_tok = ('close', new_name, f'</{new_name}>')
+    logger.debug(
+        "Line %d: renaming <%s> → <%s> to match reference.",
+        lineno, old_name, new_name,
+    )
+
+
 def rename_to_reference(items: list, ref_items: list, lineno: int, logger: logging.Logger) -> tuple:
     """
-    Rename top-level elements in *items* so that their tag names match the
-    corresponding elements in *ref_items* (matched by position).
+    Align top-level elements in *items* to the sequence in *ref_items*.
 
-    If the counts differ, as many elements as possible are renamed and a
-    debug message is emitted.  Returns (new_items, was_changed).
+    Rules:
+    - Elements are only renamed within the same prefix group (e.g. ExText1 →
+      ExText2 is allowed; SelectOptionCorrect* → ExText* is not).
+    - When the reference has an element whose prefix is absent at the current
+      position in *items*, an empty element with that tag name is inserted.
+    - After alignment the number of top-level elements always equals the
+      number in *ref_items*.
+
+    Returns (new_items, was_changed).
     """
-    elems     = _top_level_elements(items)
+    elems     = [it for it in items if isinstance(it, Element)]
     ref_elems = _top_level_elements(ref_items)
 
     if not ref_elems:
         return items, False
 
-    if len(elems) != len(ref_elems):
-        logger.warning(
-            "Line %d: element count mismatch – input has %d top-level element(s), "
-            "reference has %d; renaming up to min(%d, %d).",
-            lineno, len(elems), len(ref_elems), len(elems), len(ref_elems),
-        )
+    # Build the new ordered list of Elements by walking ref_elems and
+    # consuming from elems greedily when prefixes match.
+    new_elems: list = []
+    src_idx   = 0
+    changed   = False
 
-    changed = False
-    for elem, ref_elem in zip(elems, ref_elems):
-        new_name = ref_elem.tag_name
-        if elem.tag_name == new_name:
-            continue
-        logger.debug(
-            "Line %d: renaming <%s> → <%s> to match reference.",
-            lineno, elem.tag_name, new_name,
+    for ref_elem in ref_elems:
+        ref_pfx = top_prefix(ref_elem.tag_name) or ref_elem.tag_name
+
+        if src_idx < len(elems) and (top_prefix(elems[src_idx].tag_name) or elems[src_idx].tag_name) == ref_pfx:
+            # Same prefix group – reuse (and rename if the exact name differs)
+            elem = elems[src_idx]
+            src_idx += 1
+            if elem.tag_name != ref_elem.tag_name:
+                _rename_element(elem, ref_elem.tag_name, lineno, logger)
+                changed = True
+            new_elems.append(elem)
+        else:
+            # Prefix mismatch – insert an empty element to match the reference
+            logger.warning(
+                "Line %d: inserting empty <%s> to match reference (input element "
+                "at this position: <%s>).",
+                lineno,
+                ref_elem.tag_name,
+                elems[src_idx].tag_name if src_idx < len(elems) else '(none)',
+            )
+            new_elems.append(_make_empty_element(ref_elem.tag_name))
+            changed = True
+
+    # Any remaining src elements that had no reference counterpart are appended
+    # (this keeps content rather than silently dropping it).
+    if src_idx < len(elems):
+        logger.warning(
+            "Line %d: %d input element(s) have no reference counterpart and are appended as-is.",
+            lineno, len(elems) - src_idx,
         )
-        # Patch the open token
-        old_open_raw  = elem.open_tok[2]
-        new_open_raw  = re.sub(
-            r'^<[a-zA-Z_][a-zA-Z0-9_]*', '<' + new_name, old_open_raw, count=1
-        )
-        elem.open_tok  = ('open',  new_name, new_open_raw)
-        # Patch the close token
-        elem.close_tok = ('close', new_name, f'</{new_name}>')
+        new_elems.extend(elems[src_idx:])
         changed = True
 
-    return items, changed
+    if not changed:
+        return items, False
+
+    # Rebuild the items list: replace Element objects with new_elems (in order),
+    # keeping all non-Element tokens (there should be none after fixing, but
+    # preserve them for safety).
+    new_items = []
+    elem_iter = iter(new_elems)
+    for it in items:
+        if isinstance(it, Element):
+            new_items.append(next(elem_iter))
+        else:
+            new_items.append(it)
+    # Append any extra elements inserted (empty placeholders or leftover src)
+    for remaining in elem_iter:
+        new_items.append(remaining)
+
+    return new_items, True
 
 
 # ---------------------------------------------------------------------------
