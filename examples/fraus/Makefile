@@ -15,8 +15,8 @@ SRCFILES   ?= ../../../redmine_data/edukate-$(SPLIT)/edu*.xml
 TM_SRC_DIR ?= ../../../redmine_data/$(SRCLANG)-$(TRGLANG)/$(SPLIT)
 
 # Space-separated list of document IDs (without .xml) to skip in the pipeline
-SKIP_FILES ?= edu03248 edu30838 edu30056 edu31714 edu32072 edu33382 \
-              edu01957 edu30835 edu30837 edu33527 edu34989
+SKIP_FILES ?= edu03248 edu30838 edu30056 \
+              edu01957 edu30835 edu34989
 
 OUT_DIR    ?= output/$(SPLIT)/$(TRGLANG)
 TMP_DIR    ?= tmp/intermediate/$(SPLIT)/$(TRGLANG)
