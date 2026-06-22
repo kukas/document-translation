@@ -27,8 +27,8 @@ myModule = ["*.ttf"]
 include-package-data = true
 
 [project.urls]
-Homepage = "https://github.com/kukas/document-translation"
-Issues = "https://github.com/kukas/document-translation/issues"
+Homepage = "https://github.com/ufal/document-translation"
+Issues = "https://github.com/ufal/document-translation/issues"
 
 [project.scripts]
 translate_markup = "document_translation.cli.translate_markup:main"

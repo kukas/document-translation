@@ -17,7 +17,7 @@ In this repository, we implement an end-to-end system for machine translation of
 The Python module can be installed using pip from this repository:
 
 ```bash
-pip install git+https://github.com/kukas/document-translation.git
+pip install git+https://github.com/ufal/document-translation.git
 ```
 
 The module allows you to automatically translate Moses InlineText files and PDF documents.

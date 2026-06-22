@@ -13,6 +13,12 @@ attributes:
   aria-label:
     ruleTypes: [ATTRIBUTE_TRANS]
 elements:
+  # Force the XML-style markers to be inline
+  g:
+    ruleTypes: [INLINE]
+  x:
+    ruleTypes: [INLINE]
+    
   meta:
     ruleTypes: [ATTRIBUTES_ONLY]
     translatableAttributes:
